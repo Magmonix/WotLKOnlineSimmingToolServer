@@ -1,0 +1,705 @@
+﻿@page "/"
+@using WotLKOnlineSimmingToolServer.Data;
+@using WotLKOnlineSimmingToolServer.Data.CharacterHistory.CharacterInfo;
+@using WotLKOnlineSimmingToolServer.Data.Glyphs;
+@using System.Net.Http.Json;
+@using System.Xml;
+@using System.Linq;
+
+@inject NavigationManager NavManager
+@inject IJSRuntime jsRuntime
+
+
+<h1>Legacy Players Character Import</h1>
+<span> Number of Iterations: <input type="number" @bind="@iterations" /></span>
+<br />
+<br />
+<div>
+    <span>Glyphs</span><br />
+    <select value="@className" @onchange="MapClassToGlyphs">
+        <option selected>~CHOOSE A CLASS~</option>
+        @foreach (var className in Enum.GetNames(typeof(CharacterClassId)))
+        {
+            <option>@className</option>
+        }
+    </select>
+
+    <select @bind="@glyph1">
+        <option selected>~CHOOSE A GLYPH~</option>
+        @foreach (var glyph in glyphDict.Values)
+        {
+            <option>@glyph</option>
+        }
+    </select>
+
+    <select @bind="@glyph2">
+        <option selected>~CHOOSE A GLYPH~</option>
+        @foreach (var glyph in glyphDict.Values)
+        {
+            <option>@glyph</option>
+        }
+    </select>
+
+    <select @bind="@glyph3">
+        <option selected>~CHOOSE A GLYPH~</option>
+        @foreach (var glyph in glyphDict.Values)
+        {
+            <option>@glyph</option>
+        }
+    </select>
+
+    <select @bind="@glyph4">
+        <option selected>~CHOOSE A GLYPH~</option>
+        @foreach (var glyph in glyphDict.Values)
+        {
+            <option>@glyph</option>
+        }
+    </select>
+
+    <select @bind="@glyph5">
+        <option selected>~CHOOSE A GLYPH~</option>
+        @foreach (var glyph in glyphDict.Values)
+        {
+            <option>@glyph</option>
+        }
+    </select>
+
+    <select @bind="@glyph6">
+        <option selected>~CHOOSE A GLYPH~</option>
+        @foreach (var glyph in glyphDict.Values)
+        {
+            <option>@glyph</option>
+        }
+    </select>
+
+</div>
+
+
+<select @bind="@sName">
+    <option selected>~CHOOSE A SERVER~</option>
+    @foreach (var server in servers)
+    {
+        <option>@server.name</option>
+    }
+</select>
+<input type="text" @bind="@characterName" placeholder="Character Name" />
+
+<button @onclick="ImportFromLegacyPlayers">Import</button>
+<br />
+<br />
+<br />
+
+<span>
+    To use this tool someone must have uploaded logs for a raid your character was in to <a href="https://legacyplayers.com">Legacy Players</a>.<br />
+    The more recently your data was captured the better, obviously.<br />
+</span>
+
+
+@functions{
+    public string characterName { get; set; }
+    public string serverName { get; set; }
+}
+
+@code
+    {
+    private IEnumerable<Server> servers = Array.Empty<Server>();
+    private CharacterViewer characterViewer;
+    private CharacterHistory characterHistory;
+    string className = "";
+    string sName = "";
+    Dictionary<int, string> glyphDict = new Dictionary<int, string>();
+    string glyph1 = "";
+    string glyph2 = "";
+    string glyph3 = "";
+    string glyph4 = "";
+    string glyph5 = "";
+    string glyph6 = "";
+    int historyId = 0;
+    int iterations = 5000;//NEED TO PASS THIS TO NEW PAGES
+
+    private async Task Validation()
+    {
+        if (characterName.Any(ch => !Char.IsLetter(ch)))
+        {
+            await jsRuntime.InvokeVoidAsync("alert", "The character name cannot contain spaces or special characters.");
+            throw new ArgumentException(message: "The character name cannot contain spaces or special characters.");
+        }
+    }
+
+    private void MapClassToGlyphs(ChangeEventArgs args)
+    {
+        className = args.Value.ToString();
+        switch (className)
+        {
+            case "Warrior":
+                {
+                    glyphDict = WarriorGlyphs.warriorGlyphs;
+                    break;
+                }
+
+            case "Paladin":
+                {
+                    glyphDict = PaladinGlyphs.paladinGlyphs;
+                    break;
+                }
+
+            case "Hunter":
+                {
+                    glyphDict = HunterGlyphs.hunterGlyphs;
+                    break;
+                }
+
+            case "Rogue":
+                {
+                    glyphDict = RogueGlyphs.rogueGlyphs;
+                    break;
+                }
+
+            case "Priest":
+                {
+                    glyphDict = PriestGlyphs.priestGlyphs;
+                    break;
+                }
+
+            case "Shaman":
+                {
+                    glyphDict = ShamanGlyphs.shamanGlyphs;
+                    break;
+                }
+
+            case "Mage":
+                {
+                    glyphDict = MageGlyphs.mageGlyphs;
+                    break;
+                }
+
+            case "Warlock":
+                {
+                    glyphDict = WarlockGlyphs.warlockGlyphs;
+                    break;
+                }
+
+            case "Druid":
+                {
+                    glyphDict = DruidGlyphs.druidGlyphs;
+                    break;
+                }
+
+            case "DeathKnight":
+                {
+                    glyphDict = DeathKnightGlyphs.deathKnightGlyphs;
+                    break;
+                }
+
+            default: throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    private async Task GetHistoryId()
+    {
+        HttpClient client = new HttpClient();
+        string uri = "https://legacyplayers.com/API/armory/character_viewer/" + sName + "/" + characterName; //Check user input here...
+        uri = Uri.EscapeUriString(uri);
+        HttpResponseMessage response = await client.GetAsync(uri);
+        if (response.IsSuccessStatusCode)
+        {
+            characterViewer = await response.Content.ReadFromJsonAsync<CharacterViewer>();
+        }
+        var currentHighest = 0;
+
+        foreach (var hist in characterViewer.history)
+        {
+            if (int.Parse(hist.label_key) > currentHighest)
+            {
+                currentHighest = int.Parse(hist.label_key);
+                historyId = hist.value;
+            }
+        }
+    }
+
+    private async Task GetCharacterInfo()
+    {
+        HttpClient client = new HttpClient();
+        string uri = "https://legacyplayers.com/API/armory/character_history/" + historyId;
+        HttpResponseMessage response = await client.GetAsync(uri);
+        if (response.IsSuccessStatusCode)
+        {
+            characterHistory = await response.Content.ReadFromJsonAsync<CharacterHistory>();
+        }
+    }
+
+    private string GetCharacterGlyphs(string characterClass)
+    {
+        string warriorGlyphString = "0000000000000000000000000000000000";
+        string paladinGlyphString = "0000000000000000000000000000000000";
+        string hunterGlyphString = "000000000000000000000000000000000";
+        string rogueGlyphString = "0000000000000000000000000000000000";
+        string priestGlyphString = "000000000000000000000000000000000";
+        string shamanGlyphString = "00000000000000000000000000000";
+        string mageGlyphString = "0000000000000000000";
+        string warlockGlyphString = "00000000000000000";
+        string druidGlyphString = "0000000000000000000000000";
+        string deathknightGlyphString = "000000000000000000000000000000000";
+
+        switch (characterClass)
+        {
+            case "Warrior":
+                {
+                    return AddGlyphsToString(warriorGlyphString, WarriorGlyphs.warriorGlyphs);
+                }
+
+            case "Paladin":
+                {
+                    return AddGlyphsToString(paladinGlyphString, PaladinGlyphs.paladinGlyphs);
+                }
+
+            case "Hunter":
+                {
+                    return AddGlyphsToString(hunterGlyphString, HunterGlyphs.hunterGlyphs);
+                }
+
+            case "Rogue":
+                {
+                    return AddGlyphsToString(rogueGlyphString, RogueGlyphs.rogueGlyphs);
+                }
+
+            case "Priest":
+                {
+                    return AddGlyphsToString(priestGlyphString, PriestGlyphs.priestGlyphs);
+                }
+
+            case "Shaman":
+                {
+                    return AddGlyphsToString(shamanGlyphString, ShamanGlyphs.shamanGlyphs);
+                }
+
+            case "Mage":
+                {
+                    return AddGlyphsToString(mageGlyphString, MageGlyphs.mageGlyphs);
+                }
+
+            case "Warlock":
+                {
+                    return AddGlyphsToString(warlockGlyphString, WarlockGlyphs.warlockGlyphs);
+                }
+
+            case "Druid":
+                {
+                    return AddGlyphsToString(druidGlyphString, DruidGlyphs.druidGlyphs);
+                }
+
+            case "DeathKnight":
+                {
+                    return AddGlyphsToString(deathknightGlyphString, DeathKnightGlyphs.deathKnightGlyphs);
+                }
+
+            default: throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    private string AddGlyphsToString(string glyphString, Dictionary<int, string> glyphDict)
+    {
+        char[] charArray = glyphString.ToCharArray();
+        if (!string.IsNullOrEmpty(glyph1) && glyph1 != "~CHOOSE A GLYPH~") { charArray[glyphDict.FirstOrDefault(x => x.Value == glyph1).Key] = '1'; }
+        if (!string.IsNullOrEmpty(glyph2) && glyph2 != "~CHOOSE A GLYPH~") { charArray[glyphDict.FirstOrDefault(x => x.Value == glyph2).Key] = '1'; }
+        if (!string.IsNullOrEmpty(glyph3) && glyph3 != "~CHOOSE A GLYPH~") { charArray[glyphDict.FirstOrDefault(x => x.Value == glyph3).Key] = '1'; }
+        if (!string.IsNullOrEmpty(glyph4) && glyph4 != "~CHOOSE A GLYPH~") { charArray[glyphDict.FirstOrDefault(x => x.Value == glyph4).Key] = '1'; }
+        if (!string.IsNullOrEmpty(glyph5) && glyph5 != "~CHOOSE A GLYPH~") { charArray[glyphDict.FirstOrDefault(x => x.Value == glyph5).Key] = '1'; }
+        if (!string.IsNullOrEmpty(glyph6) && glyph6 != "~CHOOSE A GLYPH~") { charArray[glyphDict.FirstOrDefault(x => x.Value == glyph6).Key] = '1'; }
+
+        string str = string.Join("",charArray);
+
+        return str;
+    }
+
+    private async Task<CharacterHistory> ConvertToXML()
+    {
+        string characterClass = ((CharacterClassId)characterHistory.character_info.hero_class_id).ToString();
+        string characterRace = ((CharacterRaceId)characterHistory.character_info.race_id).ToString();
+        CharacterGear gear = characterHistory.character_info.gear;
+        string talents = characterHistory.character_info.talent_specialization.Replace("|", "");
+
+
+
+        await using (XmlWriter w = XmlWriter.Create("C:\\inetpub\\WotLKSim\\simc\\" + sName.Replace(" ", "") + characterHistory.character_name + ".xml", new XmlWriterSettings() { Async = true }))
+        {
+            w.WriteStartElement("Character");
+            w.WriteElementString("Name", characterHistory.character_name);
+            w.WriteElementString("Race", characterRace);
+            w.WriteElementString("Class", characterClass);
+            //Probably should make a method that does this >_>
+            if (gear.head != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.head.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.head.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.head.enchant_id != null) { enchant = gear.head.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Head", gear.head.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Head", ""); }
+
+            if (gear.neck != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.neck.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.neck.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.neck.enchant_id != null) { enchant = gear.neck.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Neck", gear.neck.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Neck", ""); }
+
+            if (gear.shoulder != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.shoulder.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.shoulder.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.shoulder.enchant_id != null) { enchant = gear.shoulder.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Shoulder", gear.shoulder.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Shoulder", ""); }
+
+            if (gear.back != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.back.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.back.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.back.enchant_id != null) { enchant = gear.back.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Back", gear.back.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Back", ""); }
+
+            if (gear.chest != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.chest.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.chest.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.chest.enchant_id != null) { enchant = gear.chest.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Chest", gear.chest.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Chest", ""); }
+
+            if (gear.wrist != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.wrist.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.wrist.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.wrist.enchant_id != null) { enchant = gear.wrist.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Wrist", gear.wrist.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Wrist", ""); }
+
+            if (gear.glove != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.glove.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.glove.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.glove.enchant_id != null) { enchant = gear.glove.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Hands", gear.glove.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Hands", ""); }
+
+            if (gear.belt != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.belt.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.belt.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.belt.enchant_id != null) { enchant = gear.belt.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Waist", gear.belt.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Waist", ""); }
+
+            if (gear.leg != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.leg.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.leg.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.leg.enchant_id != null) { enchant = gear.leg.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Legs", gear.leg.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Legs", ""); }
+
+            if (gear.boot != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.boot.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.boot.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.boot.enchant_id != null) { enchant = gear.boot.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Feet", gear.boot.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Feet", ""); }
+
+            if (gear.ring1 != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.ring1.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.ring1.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.ring1.enchant_id != null) { enchant = gear.ring1.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Finger1", gear.ring1.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Finger1", ""); }
+
+            if (gear.ring2 != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.ring2.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.ring2.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.ring2.enchant_id != null) { enchant = gear.ring2.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Finger2", gear.ring2.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Finger2", ""); }
+
+            if (gear.trinket1 != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.trinket1.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.trinket1.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.trinket1.enchant_id != null) { enchant = gear.trinket1.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Trinket1", gear.trinket1.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Trinket1", ""); }
+
+            if (gear.trinket2 != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.trinket2.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.trinket2.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.trinket2.enchant_id != null) { enchant = gear.trinket2.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Trinket2", gear.trinket2.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Trinket2", ""); }
+
+            if (gear.main_hand != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.main_hand.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.main_hand.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.main_hand.enchant_id != null) { enchant = gear.main_hand.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("MainHand", gear.main_hand.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("MainHand", ""); }
+
+            if (gear.off_hand != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.off_hand.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.off_hand.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.off_hand.enchant_id != null) { enchant = gear.off_hand.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("OffHand", gear.off_hand.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("OffHand", ""); }
+
+
+            if (gear.ternary_hand != null)
+            {
+                string gems = "";
+                string enchant = "";
+                for (int i = 0; i < 3; i++)
+                {
+                    if (gear.ternary_hand.gem_ids.ElementAt(i) == null)
+                    {
+                        gems = gems + ".0";
+                    }
+                    else
+                    {
+                        gems = gems + "." + gear.ternary_hand.gem_ids.ElementAt(i).ToString();
+                    }
+                }
+                if (gear.ternary_hand.enchant_id != null) { enchant = gear.ternary_hand.enchant_id.ToString(); } else { enchant = "0"; }
+                w.WriteElementString("Ranged", gear.ternary_hand.item_id.ToString() + gems + "." + enchant);
+            }
+            else { w.WriteElementString("Ranged", ""); }
+
+            w.WriteElementString(characterClass + "Talents", talents + "." + GetCharacterGlyphs(characterClass));
+            w.WriteEndElement();
+            w.Flush();
+        }
+        return characterHistory;
+    }
+
+    private async void ImportFromLegacyPlayers()
+    {
+        try
+        {
+            await Validation();
+            await GetHistoryId();
+            await GetCharacterInfo();
+            await ConvertToXML();
+            await jsRuntime.InvokeVoidAsync("location.replace", "/parsedData/" + sName + "/" + characterName, "_blank");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("{0} Exception caught.", e);
+        }
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        HttpClient client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync("https://legacyplayers.com/API/data/server");
+        if (response.IsSuccessStatusCode)
+        {
+            servers = await response.Content.ReadFromJsonAsync<Server[]>();
+        }
+    }
+}

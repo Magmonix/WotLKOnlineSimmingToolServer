@@ -1,0 +1,60 @@
+﻿@page "/parsedData/{serverName}/{characterName}"
+@using System.Diagnostics;
+
+@inject IJSRuntime jsRuntime
+
+
+<div id="loading">
+</div>
+<div>
+    <img src="/Spinner.gif" style="text-align:center;" />
+
+</div>
+<style>
+    #loading {
+        background: rgba(0,0,0,.5);
+        width: 100%;
+        height: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 999;
+    }
+</style>
+
+
+@functions {
+    [Parameter]
+    public string characterName { get; set; }
+    [Parameter]
+    public string serverName { get; set; }
+}
+
+
+@code {
+    private void ExecuteSimc()
+
+    {
+        serverName = serverName.Replace(" ", "");
+        ProcessStartInfo startInfo = new ProcessStartInfo("C:\\inetpub\\WotLKSim\\simc\\simc.exe");
+        startInfo.WindowStyle = ProcessWindowStyle.Normal;
+        startInfo.Arguments = "iterations=5000 html=C:\\inetpub\\WotLKSim\\" + serverName + characterName + ".html rawr=C:\\inetpub\\WotLKSim\\simc\\" + serverName + characterName + ".xml optimal_raid=1";
+        Process p = Process.Start(startInfo);
+        p.WaitForExit();
+        jsRuntime.InvokeVoidAsync("location.replace", "/Results/" + serverName + "/" + characterName, "_blank");
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            ExecuteSimc();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var cname = characterName;
+        var sname = serverName;
+    }
+}

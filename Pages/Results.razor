@@ -1,0 +1,36 @@
+﻿@page "/Results/{serverName}/{characterName}"
+@using System.IO;
+
+@((MarkupString)htmlContent)
+
+@functions {
+    [Parameter]
+    public string characterName { get; set; }
+    [Parameter]
+    public string serverName { get; set; }
+}
+
+@code {
+    private string htmlContent = "";
+
+    protected override void OnInitialized()
+    {
+
+        htmlContent = File.ReadAllText("C:\\inetpub\\WotLKSim\\" + serverName.Replace(" ", "") + characterName + ".html");
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            File.Delete("C:\\inetpub\\WotLKSim\\" + serverName.Replace(" ", "") + characterName + ".html");
+            File.Delete("C:\\inetpub\\WotLKSim\\simc\\" + serverName.Replace(" ", "") + characterName + ".xml");
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var cname = characterName;
+        var sname = serverName;
+    }
+}
