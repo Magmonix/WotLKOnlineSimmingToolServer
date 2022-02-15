@@ -23,6 +23,7 @@
             <option>@className</option>
         }
     </select>
+    <br />
 
     <select @bind="@glyph1">
         <option selected>~CHOOSE A GLYPH~</option>
@@ -79,7 +80,7 @@
     <option selected>~CHOOSE A SERVER~</option>
     @foreach (var server in servers)
     {
-        <option>@server.name</option>
+        if(server.patch == "3.3.5" || server.patch == "3.3.5a") { <option>@server.name</option> }
     }
 </select>
 <input type="text" @bind="@characterName" placeholder="Character Name" />
@@ -98,6 +99,7 @@
 @functions{
     public string characterName { get; set; }
     public string serverName { get; set; }
+    public string iterations { get; set; } = "5000";
 }
 
 @code
@@ -105,17 +107,16 @@
     private IEnumerable<Server> servers = Array.Empty<Server>();
     private CharacterViewer characterViewer;
     private CharacterHistory characterHistory;
-    string className = "";
-    string sName = "";
+    string className = "~CHOOSE A CLASS~";
+    string sName = "~CHOOSE A SERVER~";
     Dictionary<int, string> glyphDict = new Dictionary<int, string>();
-    string glyph1 = "";
-    string glyph2 = "";
-    string glyph3 = "";
-    string glyph4 = "";
-    string glyph5 = "";
-    string glyph6 = "";
+    string glyph1 = "~CHOOSE A GLYPH~";
+    string glyph2 = "~CHOOSE A GLYPH~";
+    string glyph3 = "~CHOOSE A GLYPH~";
+    string glyph4 = "~CHOOSE A GLYPH~";
+    string glyph5 = "~CHOOSE A GLYPH~";
+    string glyph6 = "~CHOOSE A GLYPH~";
     int historyId = 0;
-    int iterations = 5000;//NEED TO PASS THIS TO NEW PAGES
 
     private async Task Validation()
     {
@@ -684,7 +685,7 @@
             await GetHistoryId();
             await GetCharacterInfo();
             await ConvertToXML();
-            await jsRuntime.InvokeVoidAsync("location.replace", "/parsedData/" + sName + "/" + characterName, "_blank");
+            await jsRuntime.InvokeVoidAsync("location.replace", "/parsedData/" + sName + "/" + characterName + "/" + iterations, "_blank");
         }
         catch (Exception e)
         {
